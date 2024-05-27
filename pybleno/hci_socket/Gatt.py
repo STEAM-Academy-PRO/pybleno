@@ -237,7 +237,7 @@ class Gatt:
 
                 self._handles[i]['value'] = array.array('B', [0x00, 0x00])
 
-                if self._handles[i]['attribute'] and self._handles[i]['attribute'].emit:
+                if self._handles[i]['attribute'] and hasattr(self._handles[i]['attribute'], "emit"):
                     self._handles[i]['attribute'].emit('unsubscribe', [])
 
     def send(self, data):
@@ -882,7 +882,7 @@ class Gatt:
 
     def handleConfirmation(self, request):
         if self._lastIndicatedAttribute:
-            if self._lastIndicatedAttribute.emit:
+            if hasattr(self._lastIndicatedAttribute, "emit"):
                 self._lastIndicatedAttribute.emit('indicate', [])
 
             self._lastIndicatedAttribute = None

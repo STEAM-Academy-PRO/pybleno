@@ -1,21 +1,16 @@
-import threading
 import math
 import time
 from .Emit import Emit
 from .BluetoothHCI import *
-# from constants import *
+
 from .constants2 import *
-from os import popen
-import codecs
 from .Io import *
 from .HciStatus import *
 
 
 class Hci(Emit):
-    STATUS_MAPPER = STATUS_MAPPER
-
-    def __init__(self):
-        super(Hci, self).__init__()
+    def __init__(self) -> None:
+        super().__init__()
 
         self._socket = BluetoothHCI(auto_start=False)
         self._isDevUp = None
@@ -28,11 +23,9 @@ class Hci(Emit):
 
         self.resetBuffers()
 
-        self._handleBuffers = {}
+        self.on("stateChange", self.onStateChange)
 
-        self.on('stateChange', self.onStateChange)
-
-    def init(self):
+    def init(self) -> None:
 
         self._socket.on_data(self.onSocketData)
 
@@ -50,9 +43,10 @@ class Hci(Emit):
 
     # def io_thread(self):
     #     while True:
+
     #         pass
 
-    def initDev(self):
+    def initDev(self) -> None:
         self.setEventMask()
         self.setLeEventMask()
         self.readLocalVersion()
@@ -61,12 +55,13 @@ class Hci(Emit):
         self.readBdAddr()
         self.leReadBufferSize()
 
-    def resetBuffers(self):
-        self._handleAclsInProgress = {}
+    def resetBuffers(self) -> None:
+        self._mainHandle = None
+        self._handleAclsInProgress: dict[int, int] = {}
         self._handleBuffers = {}
         self._aclOutQueue = []
 
-    def setSocketFilter(self):
+    def setSocketFilter(self) -> None:
         typeMask = (1 << HCI_EVENT_PKT) | (1 << HCI_ACLDATA_PKT)
         eventMask1 = (
             (1 << EVT_DISCONN_COMPLETE)
@@ -75,14 +70,14 @@ class Hci(Emit):
             | (1 << EVT_CMD_STATUS)
             | (1 << EVT_NUMBER_OF_COMPLETED_PACKETS)
         )
-        eventMask2 = (1 << (EVT_LE_META_EVENT - 32))
+        eventMask2 = 1 << (EVT_LE_META_EVENT - 32)
         opcode = 0
 
         # debug('setting filter to: ' + filter.toString('hex'))
         filter = struct.pack("<LLLH", typeMask, eventMask1, eventMask2, opcode)
         self._socket.set_filter(filter)
 
-    def setEventMask(self):
+    def setEventMask(self) -> None:
         # cmd = new Buffer(12)
         # eventMask = new Buffer('fffffbff07f8bf3d', 'hex')
 
@@ -95,14 +90,14 @@ class Hci(Emit):
 
         # eventMask.copy(cmd, 4)
 
-        cmd = array.array('B', [0] * 12)
+        cmd = array.array("B", [0] * 12)
         struct.pack_into("<BHB", cmd, 0, HCI_COMMAND_PKT, SET_EVENT_MASK_CMD, 8)
-        struct.pack_into(">Q", cmd, 4, 0xfffffbff07f8bf3d)
+        struct.pack_into(">Q", cmd, 4, 0xFFFFFBFF07F8BF3D)
         # debug('set event mask - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def reset(self):
-        cmd = array.array('B', [0] * 4)
+    def reset(self) -> None:
+        cmd = array.array("B", [0] * 4)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -114,8 +109,8 @@ class Hci(Emit):
         # debug('reset');
         self.write(cmd)
 
-    def readLeHostSupported(self):
-        cmd = array.array('B', [0] * 4)
+    def readLeHostSupported(self) -> None:
+        cmd = array.array("B", [0] * 4)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -128,9 +123,9 @@ class Hci(Emit):
         # debug('read LE host supported - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def writeLeHostSupported(self):
+    def writeLeHostSupported(self) -> None:
         # cmd = new Buffer(6)
-        cmd = array.array('B', [0] * 6)
+        cmd = array.array("B", [0] * 6)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -149,8 +144,8 @@ class Hci(Emit):
         # print [hex(c) for c in cmd]
         self.write(cmd)
 
-    def readLocalVersion(self):
-        cmd = array.array('B', [0] * 4)
+    def readLocalVersion(self) -> None:
+        cmd = array.array("B", [0] * 4)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -163,8 +158,8 @@ class Hci(Emit):
         # debug('read local version - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def readBdAddr(self):
-        cmd = array.array('B', [0] * 4)
+    def readBdAddr(self) -> None:
+        cmd = array.array("B", [0] * 4)
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
         writeUInt16LE(cmd, READ_BD_ADDR_CMD, 1)
@@ -176,7 +171,7 @@ class Hci(Emit):
         # debug('read bd addr - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def setLeEventMask(self):
+    def setLeEventMask(self) -> None:
         # #cmd = new Buffer(12)
         # cmd = array.array('B', [0] * 12)
         # #leEventMask = new Buffer('1f00000000000000', 'hex')
@@ -197,8 +192,8 @@ class Hci(Emit):
         # #debug('set le event mask - writing: ' + cmd.toString('hex'))
         # #print [hex(c) for c in cmd]
         # self.write(cmd)
-        cmd = array.array('B', [0] * 12)
-        leEventMask = array.array('B', bytearray.fromhex('1f00000000000000'))
+        cmd = array.array("B", [0] * 12)
+        leEventMask = array.array("B", bytearray.fromhex("1f00000000000000"))
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -213,9 +208,9 @@ class Hci(Emit):
         # console.log('set le event mask - writing: ' + cmd.toString('hex'));
         self.write(cmd)
 
-    def setAdvertisingParameters(self):
+    def setAdvertisingParameters(self) -> None:
         # cmd = new Buffer(19)
-        cmd = array.array('B', [0] * 19)
+        cmd = array.array("B", [0] * 19)
 
         # # header
         # cmd.writeUInt8(HCI_COMMAND_PKT, 0)
@@ -237,15 +232,30 @@ class Hci(Emit):
         # cmd.writeUInt8(0x07, 17)
         # cmd.writeUInt8(0x00, 18)
 
-        struct.pack_into("<BHBHHBBBIHBB", cmd, 0, HCI_COMMAND_PKT, LE_SET_ADVERTISING_PARAMETERS_CMD, 15,
-                         advertisementInterval, advertisementInterval, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00)
+        struct.pack_into(
+            "<BHBHHBBBIHBB",
+            cmd,
+            0,
+            HCI_COMMAND_PKT,
+            LE_SET_ADVERTISING_PARAMETERS_CMD,
+            15,
+            advertisementInterval,
+            advertisementInterval,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x07,
+            0x00,
+        )
 
         # debug('set advertisement parameters - writing: ' + cmd.toString('hex'))
         # print('set advertise parameters - writing: ' + `[hex(c) for c in cmd]`)
         self.write(cmd)
 
-    def setAdvertisingData(self, data):
-        cmd = array.array('B', [0] * 36)
+    def setAdvertisingData(self, data) -> None:
+        cmd = array.array("B", [0] * 36)
 
         # cmd.fill(0x00)
 
@@ -263,8 +273,8 @@ class Hci(Emit):
         # debug('set advertisement data - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def setScanResponseData(self, data):
-        cmd = array.array('B', [0] * 36)
+    def setScanResponseData(self, data) -> None:
+        cmd = array.array("B", [0] * 36)
         #     cmd.fill(0x00)
 
         # header
@@ -282,8 +292,8 @@ class Hci(Emit):
         # print('set scan response data - writing: ' + `[hex(c) for c in cmd]`)
         self.write(cmd)
 
-    def setAdvertiseEnable(self, enabled):
-        cmd = array.array('B', [0] * 5)
+    def setAdvertiseEnable(self, enabled) -> None:
+        cmd = array.array("B", [0] * 5)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -299,8 +309,8 @@ class Hci(Emit):
         # debug('set advertise enable - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def disconnect(self, handle, reason=None):
-        cmd = array.array('B', [0] * 7)
+    def disconnect(self, handle, reason=None) -> None:
+        cmd = array.array("B", [0] * 7)
 
         reason = reason or HCI_OE_USER_ENDED_CONNECTION
 
@@ -318,8 +328,8 @@ class Hci(Emit):
         # debug('disconnect - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def readRssi(self, handle):
-        cmd = array.array('B', [0] * 6)
+    def readRssi(self, handle) -> None:
+        cmd = array.array("B", [0] * 6)
 
         # header
         writeUInt8(cmd, HCI_COMMAND_PKT, 0)
@@ -334,7 +344,7 @@ class Hci(Emit):
         # debug('read rssi - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def leReadBufferSize(self):
+    def leReadBufferSize(self) -> None:
         pkt = array.array("B", [0] * 4)
 
         # header
@@ -345,7 +355,7 @@ class Hci(Emit):
         # debug('le read buffer size - writing: ' + pkt.toString('hex'))
         self.write(pkt)
 
-    def readBufferSize(self):
+    def readBufferSize(self) -> None:
         pkt = array.array("B", [0] * 4)
 
         # header
@@ -356,7 +366,7 @@ class Hci(Emit):
         # debug('read buffer size - writing: ' + pkt.toString('hex'))
         self.write(pkt)
 
-    def queueAclDataPkt(self, handle, cid, data):
+    def queueAclDataPkt(self, handle, cid, data) -> None:
         hf = handle | ACL_START_NO_FLUSH << 12
         l2capPdu = array.array("B", [0] * (4 + len(data)))
 
@@ -379,11 +389,12 @@ class Hci(Emit):
             copy(frag, pkt, 5)
 
             self._aclOutQueue.append({"handle": handle, "pkt": pkt, "fragId": fragId})
+
             fragId += 1
 
         self.pushAclOutQueue()
 
-    def pushAclOutQueue(self):
+    def pushAclOutQueue(self) -> None:
         inProgress = 0
         for count in self._handleAclsInProgress.values():
             inProgress += count
@@ -397,8 +408,13 @@ class Hci(Emit):
         # printf("\tin progress = {inProgress}")
         # printf("\twaiting = {self._aclOutQueue.length}")
 
-    def writeOneAclDataPkt(self):
+    def writeOneAclDataPkt(self) -> None:
         pkt = self._aclOutQueue.pop(0)
+        if pkt["handle"] not in self._handleAclsInProgress:
+            # handle is closed, do not throw exception
+            # FIXME: this is a hack, Gatt notifications should be properly cleared instead
+            return
+
         self._handleAclsInProgress[pkt["handle"]] += 1
         # debug(
         #     "write acl data pkt frag "
@@ -410,11 +426,11 @@ class Hci(Emit):
         # )
         self._socket.write(pkt["pkt"])
 
-    def write(self, pkt):
+    def write(self, pkt) -> None:
         # print 'WRITING: %s' % ''.join(format(x, '02x') for x in pkt)
         self._socket.write(pkt)
 
-    def onSocketData(self, data):
+    def onSocketData(self, data) -> None:
         # print 'READING: %s' % ''.join(format(x, '02x') for x in data)
         # print 'got data!'
         # print [hex(c) for c in data]
@@ -438,6 +454,9 @@ class Hci(Emit):
             if subEventType == EVT_DISCONN_COMPLETE:
                 handle = readUInt16LE(data, 4)
 
+                if handle != self._mainHandle:
+                    return
+
                 reason = readUInt8(data, 6)
 
                 # debug('\t\thandle = ' + handle)
@@ -452,6 +471,7 @@ class Hci(Emit):
                 # Controller for the returned Handle have been flushed, and that the
                 # corresponding data buffers have been freed.
                 del self._handleAclsInProgress[handle]
+                self._mainHandle = None
                 aclOutQueue = []
                 discarded = 0
                 for pkt in self._aclOutQueue:
@@ -466,7 +486,7 @@ class Hci(Emit):
                 self._aclOutQueue = aclOutQueue
                 self.pushAclOutQueue()
 
-                self.emit('disconnComplete', [handle, reason])
+                self.emit("disconnComplete", [handle, reason])
 
             elif subEventType == EVT_ENCRYPT_CHANGE:
                 handle = readUInt16LE(data, 4)
@@ -474,16 +494,15 @@ class Hci(Emit):
 
                 # debug('\t\thandle = ' + handle)
                 # debug('\t\tencrypt = ' + encrypt)
-                self.emit('encryptChange', [handle, encrypt])
+                self.emit("encryptChange", [handle, encrypt])
             elif subEventType == EVT_CMD_COMPLETE:
                 # ncmd = readUInt8(data, 3)
                 cmd = readUInt16LE(data, 4)
-                # status = data.readUInt8(6)
                 status = readUInt8(data, 6)
-                # result = data.slice(7)
                 result = data[7:]
 
-                # debug('\t\tncmd = ' + ncmd)
+                # debug('\t\tncmd = ' + ncmd);
+                # debug('\t\tcmd = ' + cmd)
                 # debug('\t\tstatus = ' + status)
                 # debug('\t\tresult = ' + result.toString('hex'))
                 # print('\t\tcmd = ' + `cmd`)
@@ -502,30 +521,30 @@ class Hci(Emit):
 
                 self.processLeMetaEvent(leMetaEventType, leMetaEventStatus, leMetaEventData)
 
-        elif subEventType == EVT_NUMBER_OF_COMPLETED_PACKETS:
-            handles = readUInt8(data, 3)
-            for pkt in range(handles):
-                handle = readUInt16LE(data, 4 + pkt * 4)
-                pkts = readUInt16LE(data, 6 + pkt * 4)
-                # debug("\thandle = " + handle);
-                # debug("\t\tcompleted = " + pkts);
-                if handle not in self._handleAclsInProgress:
-                    # debug("\t\talready closed")
-                    continue
+            elif subEventType == EVT_NUMBER_OF_COMPLETED_PACKETS:
+                handles = readUInt8(data, 3)
+                for pkt in range(handles):
+                    handle = readUInt16LE(data, 4 + pkt * 4)
+                    pkts = readUInt16LE(data, 6 + pkt * 4)
+                    # debug("\thandle = " + handle);
+                    # debug("\t\tcompleted = " + pkts);
+                    if handle not in self._handleAclsInProgress:
+                        # debug("\t\talready closed")
+                        continue
 
-                if pkts > self._handleAclsInProgress[handle]:
-                    # Linux kernel may send acl packets by itself, so be ready for underflow
-                    self._handleAclsInProgress[handle] = 0
-                else:
-                    self._handleAclsInProgress[handle] -= pkts
+                    if pkts > self._handleAclsInProgress[handle]:
+                        # Linux kernel may send acl packets by itself, so be ready for underflow
+                        self._handleAclsInProgress[handle] = 0
+                    else:
+                        self._handleAclsInProgress[handle] -= pkts
 
-                # debug("\t\tin progress = " + self._handleAclsInProgress[handle]);
+                    # debug("\t\tin progress = " + self._handleAclsInProgress[handle]);
 
-            self.pushAclOutQueue()
+                self.pushAclOutQueue()
 
         elif HCI_ACLDATA_PKT == eventType:
             flags = readUInt16LE(data, 1) >> 12
-            handle = readUInt16LE(data, 1) & 0x0fff
+            handle = readUInt16LE(data, 1) & 0x0FFF
 
             if ACL_START == flags:
                 cid = readUInt16LE(data, 7)
@@ -539,34 +558,39 @@ class Hci(Emit):
                     # debug('\t\thandle = ' + handle)
                     # debug('\t\tdata = ' + pktData.toString('hex'))
 
-                    self.emit('aclDataPkt', [handle, cid, pktData])
+                    self.emit("aclDataPkt", [handle, cid, pktData])
                 else:
-                    self._handleBuffers[handle] = {
-                        'length': length,
-                        'cid':    cid,
-                        'data':   pktData
-                    }
+                    self._handleBuffers[handle] = {"length": length, "cid": cid, "data": pktData}
             elif ACL_CONT == flags:
-                if not handle in self._handleBuffers or not 'data' in self._handleBuffers[handle]:
+                if not handle in self._handleBuffers or not "data" in self._handleBuffers[handle]:
                     return
-                self._handleBuffers[handle]['data'] = self._handleBuffers[handle]['data'] + data[5:]
+                self._handleBuffers[handle]["data"] = self._handleBuffers[handle]["data"] + data[5:]
 
-                if len(self._handleBuffers[handle]['data']) == self._handleBuffers[handle]['length']:
-                    self.emit('aclDataPkt',
-                              [handle, self._handleBuffers[handle]['cid'], self._handleBuffers[handle]['data']])
+                if (
+                    len(self._handleBuffers[handle]["data"])
+                    == self._handleBuffers[handle]["length"]
+                ):
+                    self.emit(
+                        "aclDataPkt",
+                        [
+                            handle,
+                            self._handleBuffers[handle]["cid"],
+                            self._handleBuffers[handle]["data"],
+                        ],
+                    )
 
                     del self._handleBuffers[handle]
 
         # print 'READ: %s' % ''.join(format(x, '02x') for x in data)
 
-    def onSocketError(self, error):
+    def onSocketError(self, error) -> None:
         # debug('onSocketError: ' + error.message);
-        if error.message == 'Operation not permitted':
-            self.emit('stateChange', ['unauthorized'])
-        elif error.message == 'Network is down':
+        if error.message == "Operation not permitted":
+            self.emit("stateChange", ["unauthorized"])
+        elif error.message == "Network is down":
             pass  # no-op
 
-    def processCmdCompleteEvent(self, cmd, status, result):
+    def processCmdCompleteEvent(self, cmd, status, result) -> None:
         # handle
         if cmd == RESET_CMD:
             self.initDev()
@@ -585,30 +609,30 @@ class Hci(Emit):
             lmpSubVer = readUInt16LE(result, 6)
 
             if hciVer < 0x06:
-                self.emit('stateChange', 'unsupported')
-            elif self._state != 'poweredOn':
+                self.emit("stateChange", "unsupported")
+            elif self._state != "poweredOn":
                 self.setAdvertiseEnable(False)
                 self.setAdvertisingParameters()
 
-            self.emit('readLocalVersion', [hciVer, hciRev, lmpVer, manufacturer, lmpSubVer])
+            self.emit("readLocalVersion", [hciVer, hciRev, lmpVer, manufacturer, lmpSubVer])
 
         elif cmd == READ_BD_ADDR_CMD:
-            self.addressType = 'public'
+            self.addressType = "public"
             # self.address = hex(result).match(/.{1,2}/g).reverse().join(':')
             self.address = "%02x:%02x:%02x:%02x:%02x:%02x" % struct.unpack("BBBBBB", result)
             # debug('address = ' + this.address)
 
-            self.emit('addressChange', [self.address])
+            self.emit("addressChange", [self.address])
         elif cmd == LE_SET_ADVERTISING_PARAMETERS_CMD:
-            self.emit('stateChange', ['poweredOn'])
+            self.emit("stateChange", ["poweredOn"])
 
-            self.emit('leAdvertisingParametersSet', [status])
+            self.emit("leAdvertisingParametersSet", [status])
         elif cmd == LE_SET_ADVERTISING_DATA_CMD:
-            self.emit('leAdvertisingDataSet', [status])
+            self.emit("leAdvertisingDataSet", [status])
         elif cmd == LE_SET_SCAN_RESPONSE_DATA_CMD:
-            self.emit('leScanResponseDataSet', [status])
+            self.emit("leScanResponseDataSet", [status])
         elif cmd == LE_SET_ADVERTISE_ENABLE_CMD:
-            self.emit('leAdvertiseEnableSet', [status])
+            self.emit("leAdvertiseEnableSet", [status])
         elif cmd == READ_RSSI_CMD:
             handle = readUInt16LE(result, 0)
             rssi = readInt8(result, 2)
@@ -618,12 +642,12 @@ class Hci(Emit):
             # print('\t\t\thandle = ' + `handle`)
             # print('\t\t\trssi = ' + `rssi`);
 
-            self.emit('rssiRead', [handle, rssi])
+            self.emit("rssiRead", [handle, rssi])
         elif cmd == LE_LTK_NEG_REPLY_CMD:
             handle = readUInt16LE(result, 0)
 
             # debug('\t\t\thandle = ' + handle)
-            self.emit('leLtkNegReply', [handle])
+            self.emit("leLtkNegReply", [handle])
         elif cmd == LE_READ_BUFFER_SIZE_CMD:
             if not status:
                 self.processLeReadBufferSize(result)
@@ -638,7 +662,7 @@ class Hci(Emit):
                     self._aclMtu = aclMtu
                     self._aclMaxInProgress = aclMaxInProgress
 
-    def processLeReadBufferSize(self, result):
+    def processLeReadBufferSize(self, result) -> None:
         aclMtu = readUInt16LE(result, 0)
         aclMaxInProgress = readUInt8(result, 2)
         if not aclMtu:
@@ -646,22 +670,22 @@ class Hci(Emit):
             # print("falling back to br/edr buffer size")
             self.readBufferSize()
         else:
-            # print(f"le acl_mtu = {aclMtu}")
-            # print(f"le acl_queue = {aclMaxInProgress}")
+            # print(f"le acl_mtu = {acl_mtu}")
+            # print(f"le acl_queue = {acl_queue}")
             self._aclMtu = aclMtu
             self._aclMaxInProgress = aclMaxInProgress
 
-    def processLeMetaEvent(self, eventType, status, data):
+    def processLeMetaEvent(self, eventType, status, data) -> None:
         if eventType == EVT_LE_CONN_COMPLETE:
             self.processLeConnComplete(status, data)
         elif eventType == EVT_LE_CONN_UPDATE_COMPLETE:
             self.processLeConnUpdateComplete(status, data)
 
-    def processLeConnComplete(self, status, data):
+    def processLeConnComplete(self, status, data) -> None:
         handle = readUInt16LE(data, 0)
         role = readUInt8(data, 2)
-        addressType = 'random' if readUInt8(data, 3) == 0x01 else 'public'
-        mac_data = data[4:10]
+        addressType = "random" if readUInt8(data, 3) == 0x01 else "public"
+        mac_data: array.array = data[4:10]
         mac_data.reverse()
         address = "%02x:%02x:%02x:%02x:%02x:%02x" % struct.unpack("BBBBBB", mac_data)
         interval = readUInt16LE(data, 10) * 1.25
@@ -678,13 +702,28 @@ class Hci(Emit):
         # debug('\t\t\tsupervision timeout = ' + supervisionTimeout)
         # debug('\t\t\tmaster clock accuracy = ' + masterClockAccuracy)
 
-        self.emit('leConnComplete', [status, handle, role, addressType, address, interval, latency, supervisionTimeout,
-                                     masterClockAccuracy])
+        self._mainHandle = handle
+        self._handleAclsInProgress[handle] = 0
 
-    def processLeConnUpdateComplete(self, status, data):
+        self.emit(
+            "leConnComplete",
+            [
+                status,
+                handle,
+                role,
+                addressType,
+                address,
+                interval,
+                latency,
+                supervisionTimeout,
+                masterClockAccuracy,
+            ],
+        )
+
+    def processLeConnUpdateComplete(self, status, data) -> None:
         handle = readUInt16LE(data, 0)
         interval = readUInt16LE(data, 2) * 1.25
-        latency = readUInt16LE(data, 4)  # # TODO: multiplier?
+        latency = readUInt16LE(data, 4)  # TODO: multiplier?
         supervisionTimeout = readUInt16LE(data, 6) * 10
 
         # debug('\t\t\thandle = ' + handle)
@@ -692,30 +731,29 @@ class Hci(Emit):
         # debug('\t\t\tlatency = ' + latency)
         # debug('\t\t\tsupervision timeout = ' + supervisionTimeout)
 
-        self._handleAclsInProgress[handle] = 0
+        self.emit("leConnUpdateComplete", [status, handle, interval, latency, supervisionTimeout])
 
-        self.emit('leConnUpdateComplete', [status, handle, interval, latency, supervisionTimeout])
-
-    def onStateChange(self, state):
+    def onStateChange(self, state) -> None:
         self._state = state
 
-    def isDevUp(self):
+    def isDevUp(self) -> bool:
         # for line in iter(popen("hciconfig").readline, ''):
         #     if "UP RUNNING" in line:
         #         return True
         # return False
-        pass
+        return True
 
-    def on_socket_started(self):
-        isDevUp = True  # self.isDevUp()
+    def on_socket_started(self) -> None:
+        isDevUp = self.isDevUp()
         if self._isDevUp != isDevUp:
             self._isDevUp = isDevUp
             if isDevUp:
+                self.setSocketFilter()
                 self.initDev()
             else:
-                self.emit('stateChange', ['poweredOff'])
+                self.emit("stateChange", ["poweredOff"])
 
-    def _socket_up_poller(self):
+    def _socket_up_poller(self) -> None:
         while True:
             # print(self._socket.get_device_info())
             # self._socket.device_up()
@@ -746,4 +784,3 @@ class Hci(Emit):
 
             time.sleep(1)
         # setTimeout(this.pollIsDevUp.bind(this), 1000);
-

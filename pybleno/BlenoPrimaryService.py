@@ -1,35 +1,32 @@
+from typing import Any
 from . import UuidUtil
 import json
 from .hci_socket.Emit import Emit
 
 
 class BlenoPrimaryService(Emit):
-    def __init__(self, options):
-        super(BlenoPrimaryService, self).__init__()
+    def __init__(self, options: dict[str, Any]) -> None:
+        super().__init__()
         self._dict = {}
+        self["uuid"] = UuidUtil.removeDashes(options["uuid"])
+        self["characteristics"] = options.get("characteristics", [])
 
-        self['uuid'] = UuidUtil.removeDashes(options['uuid'])
-        self['characteristics'] = options['characteristics'] if 'characteristics' in options else []
+    def __str__(self) -> str:
+        return json.dumps({"uuid": self["uuid"], "characteristics": self["characteristics"]})
 
-    def __str__(self):
-        return json.dumps({
-            'uuid':            self['uuid'],
-            'characteristics': self['characteristics']
-        })
-
-    def __setitem__(self, key, item):
+    def __setitem__(self, key, item) -> None:
         self._dict[key] = item
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: str):
         return self._dict[key]
 
     def __repr__(self):
         return repr(self._dict)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._dict)
 
-    def __delitem__(self, key):
+    def __delitem__(self, key) -> None:
         del self._dict[key]
 
     def clear(self):
@@ -67,4 +64,3 @@ class BlenoPrimaryService(Emit):
 
     def __unicode__(self):
         return unicode(repr(self._dict))
-

@@ -88,7 +88,7 @@ class Hci:
         writeUInt8(cmd, 0x00, 3)
 
         # debug('reset');
-        self.write_buffer(cmd)
+        self.write(cmd)
 
     def readLeHostSupported(self):
         cmd = array.array('B', [0] * 4)

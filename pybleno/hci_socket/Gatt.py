@@ -229,7 +229,7 @@ class Gatt:
 
     def onAclStreamEnd(self):
         self._aclStream.off('data', self.onAclStreamData)
-        self._aclStream.removeListener('end', self.onAclStreamEnd)
+        self._aclStream.off('end', self.onAclStreamEnd)
 
         for i in range(0, len(self._handles)):
             if (i in self._handles and self._handles[i]['type'] == 'descriptor' and self._handles[i][

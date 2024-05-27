@@ -230,7 +230,7 @@ class Gatt(Emit):
 
     def onAclStreamEnd(self):
         self._aclStream.off('data', self.onAclStreamData)
-        self._aclStream.removeListener('end', self.onAclStreamEnd)
+        self._aclStream.off('end', self.onAclStreamEnd)
 
         for i in range(0, len(self._handles)):
             if (i in self._handles and self._handles[i]['type'] == 'descriptor' and self._handles[i][
@@ -238,7 +238,7 @@ class Gatt(Emit):
 
                 self._handles[i]['value'] = array.array('B', [0x00, 0x00])
 
-                if self._handles[i]['attribute'] and self._handles[i]['attribute'].emit:
+                if self._handles[i]['attribute'] and hasattr(self._handles[i]['attribute'], "emit"):
                     self._handles[i]['attribute'].emit('unsubscribe', [])
 
     def send(self, data):
@@ -883,7 +883,7 @@ class Gatt(Emit):
 
     def handleConfirmation(self, request):
         if self._lastIndicatedAttribute:
-            if self._lastIndicatedAttribute.emit:
+            if hasattr(self._lastIndicatedAttribute, "emit"):
                 self._lastIndicatedAttribute.emit('indicate', [])
 
             self._lastIndicatedAttribute = None

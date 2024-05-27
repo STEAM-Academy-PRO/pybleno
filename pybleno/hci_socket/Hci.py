@@ -397,6 +397,9 @@ class Hci:
 
     def writeOneAclDataPkt(self):
         pkt = self._aclOutQueue.pop(0)
+        if pkt["handle"] not in self._handleAclsInProgress:
+            return
+
         self._handleAclsInProgress[pkt["handle"]] += 1
         # debug(
         #     "write acl data pkt frag "

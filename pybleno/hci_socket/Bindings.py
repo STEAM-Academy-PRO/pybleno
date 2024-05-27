@@ -1,5 +1,5 @@
 import platform
-from . import Emit
+from .Emit import Emit
 
 from .Hci import Hci
 from .Gap import Gap
@@ -7,8 +7,9 @@ from .Gatt import Gatt
 from .AclStream import AclStream
 
 
-class BlenoBindings:
+class BlenoBindings(Emit):
     def __init__(self):
+        super(BlenoBindings, self).__init__()
         self._state = None
 
         self._advertising = False
@@ -168,5 +169,3 @@ class BlenoBindings:
         if (self._handle == handle and self._aclStream):
             self._aclStream.push(cid, data)
 
-
-Emit.Patch(BlenoBindings)

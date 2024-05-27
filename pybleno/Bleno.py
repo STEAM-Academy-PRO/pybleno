@@ -2,7 +2,7 @@ import array
 import platform
 import sys
 from . import UuidUtil
-from .hci_socket import Emit
+from .hci_socket.Emit import Emit
 
 platform = platform.system().lower()
 
@@ -30,8 +30,9 @@ def is_callable(callback):
         return hasattr(callback, '__call__')
 
 
-class Bleno:
+class Bleno(Emit):
     def __init__(self):
+        super(Bleno, self).__init__()
         self.platform = 'unknown'
         self.state = 'unknown'
         self.address = 'unknown'
@@ -194,5 +195,3 @@ class Bleno:
     def onRssiUpdate(self, rssi):
         self.emit('rssiUpdate', [rssi])
 
-
-Emit.Patch(Bleno)

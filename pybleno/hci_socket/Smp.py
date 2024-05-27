@@ -1,4 +1,4 @@
-from . import Emit
+from .Emit import Emit
 import array
 from .Io import *
 
@@ -15,8 +15,9 @@ SMP_MASTER_IDENT = 0x07
 SMP_UNSPECIFIED = 0x08
 
 
-class Smp:
+class Smp(Emit):
     def __init__(self, aclStream, localAddressType, localAddress, remoteAddressType, remoteAddress):
+        super(Smp, self).__init__()
         self._aclStream = aclStream
 
         self._iat = array.array('B', [0x01 if (remoteAddressType == 'random') else 0x00])
@@ -139,5 +140,3 @@ class Smp:
     def write(self, data):
         self._aclStream.write(SMP_CID, data)
 
-
-Emit.Patch(Smp)

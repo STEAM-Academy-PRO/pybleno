@@ -1,6 +1,7 @@
 import platform
 import array
-from . import Emit, Hci
+from . import Hci
+from .Emit import Emit
 from .Io import *
 
 isLinux = (platform.system() == 'Linux')
@@ -8,8 +9,9 @@ isIntelEdison = False  # isLinux && (os.release().indexOf('edison') !== -1)
 isYocto = False  # isLinux && (os.release().indexOf('yocto') !== -1)
 
 
-class Gap:
+class Gap(Emit):
     def __init__(self, hci):
+        super(Gap, self).__init__()
         self._hci = hci
 
         self._advertiseState = None
@@ -193,5 +195,3 @@ class Gap:
 
             self.emit('advertisingStop', [])
 
-
-Emit.Patch(Gap)

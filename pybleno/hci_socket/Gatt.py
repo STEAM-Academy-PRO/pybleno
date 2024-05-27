@@ -1,4 +1,4 @@
-from . import Emit
+from .Emit import Emit
 import os
 import platform
 import array
@@ -63,8 +63,9 @@ ATT_ECODE_INSUFF_RESOURCES = 0x11
 ATT_CID = 0x0004
 
 
-class Gatt:
+class Gatt(Emit):
     def __init__(self):
+        super(Gatt, self).__init__()
         self.maxMtu = 256
         self._mtu = 23
         self._preparedWriteRequest = None
@@ -887,5 +888,3 @@ class Gatt:
 
             self._lastIndicatedAttribute = None
 
-
-Emit.Patch(Gatt)

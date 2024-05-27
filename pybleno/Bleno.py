@@ -2,7 +2,6 @@ import array
 import platform
 import sys
 from . import UuidUtil
-from .hci_socket.Emit import Emit
 
 platform = platform.system().lower()
 
@@ -16,6 +15,7 @@ elif platform == 'linux' or platform == 'freebsd' or platform == 'windows' or pl
 else:
     raise Exception('Unsupported platform')
 
+from .hci_socket.Emit import Emit
 
 class Error(Exception):
     def __init__(self, message):

@@ -1,9 +1,9 @@
 from . import UuidUtil
 import json
-from .hci_socket import Emit
+from .hci_socket.Emit import Emit
 
 
-class BlenoPrimaryService:
+class BlenoPrimaryService(Emit):
     def __init__(self, options):
         super(BlenoPrimaryService, self).__init__()
         self._dict = {}
@@ -68,5 +68,3 @@ class BlenoPrimaryService:
     def __unicode__(self):
         return unicode(repr(self._dict))
 
-
-Emit.Patch(BlenoPrimaryService)

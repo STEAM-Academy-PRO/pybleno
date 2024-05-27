@@ -1,7 +1,7 @@
 import threading
 import math
 import time
-from . import Emit
+from .Emit import Emit
 from .BluetoothHCI import *
 # from constants import *
 from .constants2 import *
@@ -11,11 +11,11 @@ from .Io import *
 from .HciStatus import *
 
 
-class Hci:
+class Hci(Emit):
     STATUS_MAPPER = STATUS_MAPPER
 
     def __init__(self):
-        self._events = {}
+        super(Hci, self).__init__()
 
         self._socket = BluetoothHCI(auto_start=False)
         self._isDevUp = None
@@ -602,5 +602,3 @@ class Hci:
             time.sleep(1)
         # setTimeout(this.pollIsDevUp.bind(this), 1000);
 
-
-Emit.Patch(Hci)

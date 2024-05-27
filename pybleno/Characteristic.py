@@ -1,8 +1,8 @@
-from .hci_socket import Emit
+from .hci_socket.Emit import Emit
 from . import UuidUtil
 
 
-class Characteristic:
+class Characteristic(Emit):
     RESULT_SUCCESS = 0x00
     RESULT_INVALID_OFFSET = 0x07
     RESULT_ATTR_NOT_LONG = 0x0b
@@ -123,5 +123,3 @@ class Characteristic:
     def __unicode__(self):
         return unicode(repr(self._dict))
 
-
-Emit.Patch(Characteristic)

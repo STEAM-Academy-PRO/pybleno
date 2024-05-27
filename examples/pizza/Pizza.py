@@ -1,4 +1,4 @@
-from pybleno.hci_socket import Emit
+from pybleno.hci_socket.Emit import Emit
 import _thread
 import time
 
@@ -28,9 +28,9 @@ PizzaBakeResult = {
   'ON_FIRE':    4
 }
 
-class Pizza():
+class Pizza(Emit):
     def __init__(self):
-        #events.EventEmitter.call(this)
+        super(Pizza, self).__init__()
         self.toppings = PizzaToppings['NONE']
         self.crust = PizzaCrust['NORMAL']
         
@@ -52,5 +52,3 @@ class Pizza():
                 result = PizzaBakeResult['ON_FIRE']
             self.emit('ready', [result]);
         thread.start_new_thread(on_timeout, ())
-
-Emit.Patch(Pizza)

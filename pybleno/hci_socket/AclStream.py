@@ -1,9 +1,10 @@
-from . import Emit
+from .Emit import Emit
 from .Smp import Smp
 
 
-class AclStream:
+class AclStream(Emit):
     def __init__(self, hci, handle, localAddressType, localAddress, remoteAddressType, remoteAddress):
+        super(AclStream, self).__init__()
         self._hci = hci
         self._handle = handle
         self.encrypted = False
@@ -17,7 +18,7 @@ class AclStream:
         if data:
             self.emit('data', [cid, data])
         else:
-            self.emit('end', []);
+            self.emit('end', [])
 
     def pushEncrypt(self, encrypt):
         self.encrypted = True if encrypt else False
@@ -27,5 +28,3 @@ class AclStream:
     def pushLtkNegReply(self):
         self.emit('ltkNegReply', [])
 
-
-Emit.Patch(AclStream)

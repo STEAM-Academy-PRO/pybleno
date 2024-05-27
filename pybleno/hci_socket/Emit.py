@@ -1,43 +1,31 @@
-def on(self, event, handler):
-    self._events = self._events
-    handlers = self._events[event] = self._events[event] if event in self._events else []
-    handlers.append(handler)
+class Emit:
+    def __init__(self) -> None:
+        self._events: dict[str, list] = {}
 
+    def on(self, event: str, handler) -> None:
+        if event not in self._events:
+            self._events[event] = []
 
-def off(self, event, handler):
-    handlers = self._events[event] = self._events[event] if event in self._events else []
-    handlers.remove(handler)
+        self._events[event].append(handler)
 
+    def off(self, event: str, handler) -> None:
+        if event not in self._events:
+            return
 
-def emit(self, event, arguments):
-    # print self._events
-    # print self._events[event]
-    handlers = self._events[event] if event in self._events else []
-    for handler in handlers:
-        handler(*arguments)
+        self._events[event].remove(handler)
 
+    def emit(self, event: str, arguments) -> None:
+        # print self._events
+        # print self._events[event]
+        if event not in self._events:
+            return
 
-def once(self, event, arguments, handler):
-    def temporary_handler(*arguments):
-        self.off(event, temporary_handler)
-        handler(*arguments)
+        for handler in self._events[event]:
+            handler(*arguments)
 
-    self.on(event, temporary_handler)
+    def once(self, event: str, arguments, handler) -> None:
+        def temporary_handler(*arguments) -> None:
+            self.off(event, temporary_handler)
+            handler(*arguments)
 
-
-# class Emit:
-def Patch(clzz):
-    clzz.on = on
-    clzz.emit = emit
-    clzz.off = off
-    clzz.once = once
-
-    old_init = clzz.__init__
-
-    def new_init(self, *k, **kw):
-        self._events = {}
-        old_init(self, *k, **kw)
-
-    clzz.__init__ = new_init
-
-# Patch = staticmethod(Patch)
+        self.on(event, temporary_handler)

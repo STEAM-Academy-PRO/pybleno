@@ -2,7 +2,7 @@ from .hci_socket import Emit
 from . import UuidUtil
 
 
-class Characteristic(dict):
+class Characteristic:
     RESULT_SUCCESS = 0x00
     RESULT_INVALID_OFFSET = 0x07
     RESULT_ATTR_NOT_LONG = 0x0b
@@ -11,6 +11,8 @@ class Characteristic(dict):
 
     def __init__(self, options=None):
         super(Characteristic, self).__init__()
+        self._dict = {}
+
         if options is None:
             options = {}
         self['uuid'] = UuidUtil.removeDashes(options['uuid'])
@@ -71,55 +73,55 @@ class Characteristic(dict):
         pass
 
     def __setitem__(self, key, item):
-        self.__dict__[key] = item
+        self._dict[key] = item
 
     def __getitem__(self, key):
-        return self.__dict__[key]
+        return self._dict[key]
 
     def __repr__(self):
-        return repr(self.__dict__)
+        return repr(self._dict)
 
     def __len__(self):
-        return len(self.__dict__)
+        return len(self._dict)
 
     def __delitem__(self, key):
-        del self.__dict__[key]
+        del self._dict[key]
 
     def clear(self):
-        return self.__dict__.clear()
+        return self._dict.clear()
 
     def copy(self):
-        return self.__dict__.copy()
+        return self._dict.copy()
 
     def has_key(self, k):
-        return k in self.__dict__
+        return k in self._dict
 
     def update(self, *args, **kwargs):
-        return self.__dict__.update(*args, **kwargs)
+        return self._dict.update(*args, **kwargs)
 
     def keys(self):
-        return self.__dict__.keys()
+        return self._dict.keys()
 
     def values(self):
-        return self.__dict__.values()
+        return self._dict.values()
 
     def items(self):
-        return self.__dict__.items()
+        return self._dict.items()
 
     def pop(self, *args):
-        return self.__dict__.pop(*args)
+        return self._dict.pop(*args)
 
     def __cmp__(self, dict_):
-        return self.__dict__.__cmp__(dict_)
+        return self._dict.__cmp__(dict_)
 
     def __contains__(self, item):
-        return item in self.__dict__
+        return item in self._dict
 
     def __iter__(self):
-        return iter(self.__dict__)
+        return iter(self._dict)
 
     def __unicode__(self):
-        return unicode(repr(self.__dict__))
+        return unicode(repr(self._dict))
 
 
 Emit.Patch(Characteristic)

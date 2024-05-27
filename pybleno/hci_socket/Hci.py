@@ -21,6 +21,12 @@ class Hci(Emit):
         self._isDevUp = None
         self._state = None
         self._deviceId = None
+        # le-u min payload size + l2cap header size
+        # see Bluetooth spec 4.2 [Vol 3, Part A, Chapter 4]
+        self._aclMtu = 23 + 4
+        self._aclMaxInProgress = 1
+
+        self.resetBuffers()
 
         self._handleBuffers = {}
 
@@ -44,13 +50,31 @@ class Hci(Emit):
 
     # def io_thread(self):
     #     while True:
-
     #         pass
+
+    def initDev(self):
+        self.setEventMask()
+        self.setLeEventMask()
+        self.readLocalVersion()
+        self.writeLeHostSupported()
+        self.readLeHostSupported()
+        self.readBdAddr()
+        self.leReadBufferSize()
+
+    def resetBuffers(self):
+        self._handleAclsInProgress = {}
+        self._handleBuffers = {}
+        self._aclOutQueue = []
 
     def setSocketFilter(self):
         typeMask = (1 << HCI_EVENT_PKT) | (1 << HCI_ACLDATA_PKT)
-        eventMask1 = (1 << EVT_DISCONN_COMPLETE) | (1 << EVT_ENCRYPT_CHANGE) | (1 << EVT_CMD_COMPLETE) | (
-                    1 << EVT_CMD_STATUS)
+        eventMask1 = (
+            (1 << EVT_DISCONN_COMPLETE)
+            | (1 << EVT_ENCRYPT_CHANGE)
+            | (1 << EVT_CMD_COMPLETE)
+            | (1 << EVT_CMD_STATUS)
+            | (1 << EVT_NUMBER_OF_COMPLETED_PACKETS)
+        )
         eventMask2 = (1 << (EVT_LE_META_EVENT - 32))
         opcode = 0
 
@@ -310,20 +334,81 @@ class Hci(Emit):
         # debug('read rssi - writing: ' + cmd.toString('hex'))
         self.write(cmd)
 
-    def writeAclDataPkt(self, handle, cid, data):
-        pkt = array.array('B', [0] * (9 + len(data)))
+    def leReadBufferSize(self):
+        pkt = array.array("B", [0] * 4)
 
         # header
-        writeUInt8(pkt, HCI_ACLDATA_PKT, 0)
-        writeUInt16LE(pkt, handle | ACL_START_NO_FLUSH << 12, 1)
-        writeUInt16LE(pkt, len(data) + 4, 3)  # data length 1
-        writeUInt16LE(pkt, len(data), 5)  # data length 2
-        writeUInt16LE(pkt, cid, 7)
+        writeUInt8(pkt, HCI_COMMAND_PKT, 0)
+        writeUInt16LE(pkt, LE_READ_BUFFER_SIZE_CMD, 1)
+        writeUInt8(pkt, 0x0, 3)  # data length 0
 
-        copy(data, pkt, 9)
-
-        # debug('write acl data pkt - writing: ' + pkt.toString('hex'))
+        # debug('le read buffer size - writing: ' + pkt.toString('hex'))
         self.write(pkt)
+
+    def readBufferSize(self):
+        pkt = array.array("B", [0] * 4)
+
+        # header
+        writeUInt8(pkt, HCI_COMMAND_PKT, 0)
+        writeUInt16LE(pkt, READ_BUFFER_SIZE_CMD, 1)
+        writeUInt8(pkt, 0x0, 3)  # data length 0
+
+        # debug('read buffer size - writing: ' + pkt.toString('hex'))
+        self.write(pkt)
+
+    def queueAclDataPkt(self, handle, cid, data):
+        hf = handle | ACL_START_NO_FLUSH << 12
+        l2capPdu = array.array("B", [0] * (4 + len(data)))
+
+        # header
+        writeUInt16LE(l2capPdu, len(data), 0)
+        writeUInt16LE(l2capPdu, cid, 2)
+        copy(data, l2capPdu, 4)
+        fragId = 0
+
+        while len(l2capPdu) > 0:
+            frag = l2capPdu[0 : self._aclMtu]
+            l2capPdu = l2capPdu[self._aclMtu :]
+
+            # hci header
+            pkt = array.array("B", [0] * (5 + len(frag)))
+            writeUInt8(pkt, HCI_ACLDATA_PKT, 0)
+            writeUInt16LE(pkt, hf, 1)
+            hf |= ACL_CONT << 12
+            writeUInt16LE(pkt, len(frag), 3)
+            copy(frag, pkt, 5)
+
+            self._aclOutQueue.append({"handle": handle, "pkt": pkt, "fragId": fragId})
+            fragId += 1
+
+        self.pushAclOutQueue()
+
+    def pushAclOutQueue(self):
+        inProgress = 0
+        for count in self._handleAclsInProgress.values():
+            inProgress += count
+
+        while inProgress < self._aclMaxInProgress and len(self._aclOutQueue):
+            inProgress = inProgress + 1
+            self.writeOneAclDataPkt()
+
+        # if (inProgress >= self._aclMaxInProgress and self._aclOutQueue.length):
+        # printf("acl out queue congested")
+        # printf("\tin progress = {inProgress}")
+        # printf("\twaiting = {self._aclOutQueue.length}")
+
+    def writeOneAclDataPkt(self):
+        pkt = self._aclOutQueue.pop(0)
+        self._handleAclsInProgress[pkt["handle"]] += 1
+        # debug(
+        #     "write acl data pkt frag "
+        #     + pkt.fragId
+        #     + " handle "
+        #     + pkt.handle
+        #     + " - writing: "
+        #     + pkt.pkt.toString("hex")
+        # )
+        self._socket.write(pkt["pkt"])
 
     def write(self, pkt):
         # print 'WRITING: %s' % ''.join(format(x, '02x') for x in pkt)
@@ -360,6 +445,27 @@ class Hci(Emit):
                 # print('\t\thandle = ' + `handle`)
                 # print('\t\treason = ' + `reason`)
 
+                # As per Bluetooth Core specs:
+                # When the Host receives a Disconnection Complete, Disconnection Physical
+                # Link Complete or Disconnection Logical Link Complete event, the Host shall
+                # assume that all unacknowledged HCI Data Packets that have been sent to the
+                # Controller for the returned Handle have been flushed, and that the
+                # corresponding data buffers have been freed.
+                del self._handleAclsInProgress[handle]
+                aclOutQueue = []
+                discarded = 0
+                for pkt in self._aclOutQueue:
+                    if pkt["handle"] != handle:
+                        aclOutQueue.append(pkt)
+                    else:
+                        discarded += 1
+
+                # if discarded:
+                #     debug('\t\tacls discarded = ' + discarded);
+
+                self._aclOutQueue = aclOutQueue
+                self.pushAclOutQueue()
+
                 self.emit('disconnComplete', [handle, reason])
 
             elif subEventType == EVT_ENCRYPT_CHANGE:
@@ -370,19 +476,19 @@ class Hci(Emit):
                 # debug('\t\tencrypt = ' + encrypt)
                 self.emit('encryptChange', [handle, encrypt])
             elif subEventType == EVT_CMD_COMPLETE:
-                # cmd = data.readUInt16LE(4)
+                # ncmd = readUInt8(data, 3)
                 cmd = readUInt16LE(data, 4)
                 # status = data.readUInt8(6)
                 status = readUInt8(data, 6)
                 # result = data.slice(7)
                 result = data[7:]
 
-                # debug('\t\tcmd = ' + cmd)
+                # debug('\t\tncmd = ' + ncmd)
                 # debug('\t\tstatus = ' + status)
                 # debug('\t\tresult = ' + result.toString('hex'))
                 # print('\t\tcmd = ' + `cmd`)
                 # print('\t\tstatus = ' + `status`)
-                # print('\t\tresult = ' + `result`);                
+                # print('\t\tresult = ' + `result`);
 
                 self.processCmdCompleteEvent(cmd, status, result)
             elif subEventType == EVT_LE_META_EVENT:
@@ -395,6 +501,28 @@ class Hci(Emit):
                 # debug('\t\tLE meta event data = ' + leMetaEventData.toString('hex'))
 
                 self.processLeMetaEvent(leMetaEventType, leMetaEventStatus, leMetaEventData)
+
+        elif subEventType == EVT_NUMBER_OF_COMPLETED_PACKETS:
+            handles = readUInt8(data, 3)
+            for pkt in range(handles):
+                handle = readUInt16LE(data, 4 + pkt * 4)
+                pkts = readUInt16LE(data, 6 + pkt * 4)
+                # debug("\thandle = " + handle);
+                # debug("\t\tcompleted = " + pkts);
+                if handle not in self._handleAclsInProgress:
+                    # debug("\t\talready closed")
+                    continue
+
+                if pkts > self._handleAclsInProgress[handle]:
+                    # Linux kernel may send acl packets by itself, so be ready for underflow
+                    self._handleAclsInProgress[handle] = 0
+                else:
+                    self._handleAclsInProgress[handle] -= pkts
+
+                # debug("\t\tin progress = " + self._handleAclsInProgress[handle]);
+
+            self.pushAclOutQueue()
+
         elif HCI_ACLDATA_PKT == eventType:
             flags = readUInt16LE(data, 1) >> 12
             handle = readUInt16LE(data, 1) & 0x0fff
@@ -441,12 +569,7 @@ class Hci(Emit):
     def processCmdCompleteEvent(self, cmd, status, result):
         # handle
         if cmd == RESET_CMD:
-            self.setEventMask()
-            self.setLeEventMask()
-            self.readLocalVersion()
-            self.writeLeHostSupported()
-            self.readLeHostSupported()
-            self.readBdAddr()
+            self.initDev()
         elif cmd == READ_LE_HOST_SUPPORTED_CMD:
             if status == 0:
                 le = readUInt8(result, 0)
@@ -493,7 +616,7 @@ class Hci(Emit):
             # debug('\t\t\thandle = ' + handle)
             # debug('\t\t\trssi = ' + rssi)
             # print('\t\t\thandle = ' + `handle`)
-            # print('\t\t\trssi = ' + `rssi`);            
+            # print('\t\t\trssi = ' + `rssi`);
 
             self.emit('rssiRead', [handle, rssi])
         elif cmd == LE_LTK_NEG_REPLY_CMD:
@@ -501,6 +624,32 @@ class Hci(Emit):
 
             # debug('\t\t\thandle = ' + handle)
             self.emit('leLtkNegReply', [handle])
+        elif cmd == LE_READ_BUFFER_SIZE_CMD:
+            if not status:
+                self.processLeReadBufferSize(result)
+        elif cmd == READ_BUFFER_SIZE_CMD:
+            if not status:
+                aclMtu = readUInt16LE(result, 0)
+                aclMaxInProgress = readUInt16LE(result, 3)
+                # sanity
+                if aclMtu and aclMaxInProgress:
+                    # debug('br/edr acl mtu = ' + aclMtu)
+                    # debug('br/edr acl max pkts = ' + aclMaxInProgress)
+                    self._aclMtu = aclMtu
+                    self._aclMaxInProgress = aclMaxInProgress
+
+    def processLeReadBufferSize(self, result):
+        aclMtu = readUInt16LE(result, 0)
+        aclMaxInProgress = readUInt8(result, 2)
+        if not aclMtu:
+            # as per Bluetooth specs
+            # print("falling back to br/edr buffer size")
+            self.readBufferSize()
+        else:
+            # print(f"le acl_mtu = {aclMtu}")
+            # print(f"le acl_queue = {aclMaxInProgress}")
+            self._aclMtu = aclMtu
+            self._aclMaxInProgress = aclMaxInProgress
 
     def processLeMetaEvent(self, eventType, status, data):
         if eventType == EVT_LE_CONN_COMPLETE:
@@ -543,6 +692,8 @@ class Hci(Emit):
         # debug('\t\t\tlatency = ' + latency)
         # debug('\t\t\tsupervision timeout = ' + supervisionTimeout)
 
+        self._handleAclsInProgress[handle] = 0
+
         self.emit('leConnUpdateComplete', [status, handle, interval, latency, supervisionTimeout])
 
     def onStateChange(self, state):
@@ -560,13 +711,7 @@ class Hci(Emit):
         if self._isDevUp != isDevUp:
             self._isDevUp = isDevUp
             if isDevUp:
-                self.setSocketFilter()
-                self.setEventMask()
-                self.setLeEventMask()
-                self.readLocalVersion()
-                self.writeLeHostSupported()
-                self.readLeHostSupported()
-                self.readBdAddr()
+                self.initDev()
             else:
                 self.emit('stateChange', ['poweredOff'])
 

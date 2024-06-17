@@ -452,7 +452,8 @@ class Hci(Emit):
                 # assume that all unacknowledged HCI Data Packets that have been sent to the
                 # Controller for the returned Handle have been flushed, and that the
                 # corresponding data buffers have been freed.
-                del self._handleAclsInProgress[handle]
+                if handle in self._handleAclsInProgress:
+                    del self._handleAclsInProgress[handle]
                 aclOutQueue = []
                 discarded = 0
                 for pkt in self._aclOutQueue:
